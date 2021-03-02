@@ -33,12 +33,22 @@ final class InternalFactoryToProviderAdapter<T> implements InternalFactory<T> {
   }
 
   @Override
-  public T get(Errors errors, InternalContext context, Dependency<?> dependency, boolean linked)
-      throws ErrorsException {
+  public T get(InternalContext context, Dependency<?> dependency, boolean linked)
+      throws InternalProvisionException {
+    // Set the dependency here so it is available to scope implementations (such as SingletonScope)
+    // The reason we need this is so that Scope implementations (and scope delegate providers) can
+    // create proxies of super-interfaces to support cyclic dependencies.  It would be nice to
+    // drop the setDependency method (and field), but that could only happen if cyclic proxies
+    // were also dropped.
+    context.setDependency(dependency);
     try {
-      return errors.checkForNull(provider.get(), source, dependency);
+      T t = provider.get();
+      if (t == null && !dependency.isNullable()) {
+        InternalProvisionException.onNullInjectedIntoNonNullableDependency(source, dependency);
+      }
+      return t;
     } catch (RuntimeException userException) {
-      throw errors.withSource(source).errorInProvider(userException).toException();
+      throw InternalProvisionException.errorInProvider(userException).addSource(source);
     }
   }
 

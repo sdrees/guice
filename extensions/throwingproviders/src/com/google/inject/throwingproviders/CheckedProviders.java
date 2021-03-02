@@ -16,6 +16,7 @@ import javax.annotation.Nullable;
  * Static utility methods for creating and working with instances of {@link CheckedProvider}.
  *
  * @author eatnumber1@google.com (Russ Harmon)
+ * @since 4.2
  */
 public final class CheckedProviders {
   private abstract static class CheckedProviderInvocationHandler<T> implements InvocationHandler {
@@ -111,7 +112,7 @@ public final class CheckedProviders {
 
   private static <T, P extends CheckedProvider<? super T>> P generateProvider(
       TypeLiteral<P> providerType, Optional<T> value, InvocationHandler handler) {
-    // TODO(eatnumber1): Understand why TypeLiteral#getRawType returns a Class<? super T> rather
+    // TODO(user): Understand why TypeLiteral#getRawType returns a Class<? super T> rather
     // than a Class<T> and remove this unsafe cast.
     Class<P> providerRaw = (Class) providerType.getRawType();
     return generateProvider(providerRaw, value, handler);
@@ -166,7 +167,7 @@ public final class CheckedProviders {
    */
   public static <T, P extends CheckedProvider<? super T>> P throwing(
       TypeLiteral<P> providerType, Class<? extends Throwable> throwable) {
-    // TODO(eatnumber1): Understand why TypeLiteral#getRawType returns a Class<? super T> rather
+    // TODO(user): Understand why TypeLiteral#getRawType returns a Class<? super T> rather
     // than a Class<T> and remove this unsafe cast.
     Class<P> providerRaw = (Class) providerType.getRawType();
     checkThrowable(providerRaw, throwable);

@@ -26,6 +26,7 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Provides;
 import com.google.inject.TypeLiteral;
+import com.google.inject.internal.Annotations;
 import com.google.inject.internal.ProviderMethod;
 import com.google.inject.internal.util.StackTraceElements;
 import com.google.inject.name.Names;
@@ -35,6 +36,8 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 import java.lang.reflect.Member;
+import java.util.ArrayList;
+import java.util.List;
 import junit.framework.TestCase;
 
 /**
@@ -101,7 +104,9 @@ public class ShortNameFactoryTest extends TestCase {
 
   public void testGetAnnotationName_annotationInstanceWithParameters() throws Exception {
     Key<?> key = Key.get(String.class, Names.named("name"));
-    assertEquals("@Named(value=name)", nameFactory.getAnnotationName(key));
+    assertEquals(
+        "@Named(" + Annotations.memberValueString("value", "name") + ")",
+        nameFactory.getAnnotationName(key));
   }
 
   public void testGetClassName_key() throws Exception {
@@ -129,7 +134,7 @@ public class ShortNameFactoryTest extends TestCase {
     Member method = Obj.class.getDeclaredMethod("method", String.class);
     assertEquals(
         "Method should be identified by its file name and line number",
-        "ShortNameFactoryTest.java:52",
+        "ShortNameFactoryTest.java:55",
         nameFactory.getSourceName(method));
   }
 
@@ -138,7 +143,7 @@ public class ShortNameFactoryTest extends TestCase {
         (StackTraceElement) StackTraceElements.forMember(Obj.class.getField("field"));
     assertEquals(
         "Stack trace element should be identified by its file name and line number",
-        "ShortNameFactoryTest.java:50",
+        "ShortNameFactoryTest.java:53",
         nameFactory.getSourceName(element));
   }
 
@@ -164,17 +169,16 @@ public class ShortNameFactoryTest extends TestCase {
   }
 
   public void testGetInstanceName_providerMethod() throws Exception {
-    final ProviderMethod<?>[] methodHolder = new ProviderMethod[1];
+    final List<ProviderMethod<?>> methodHolder = new ArrayList<>(1);
 
     Injector injector = Guice.createInjector(new ProvidingModule());
     injector
         .getBinding(Integer.class)
         .acceptTargetVisitor(
             new DefaultBindingTargetVisitor<Object, Void>() {
-              @SuppressWarnings("unchecked")
               @Override
               public Void visit(ProviderInstanceBinding<?> binding) {
-                methodHolder[0] = (ProviderMethod) binding.getUserSuppliedProvider();
+                methodHolder.add((ProviderMethod) binding.getUserSuppliedProvider());
                 return null;
               }
             });
@@ -182,7 +186,7 @@ public class ShortNameFactoryTest extends TestCase {
     assertEquals(
         "Method provider should pretty print as the method signature",
         "#provideInteger(String)",
-        nameFactory.getInstanceName(methodHolder[0]));
+        nameFactory.getInstanceName(methodHolder.get(0)));
   }
 
   private static class ProvidingModule extends AbstractModule {

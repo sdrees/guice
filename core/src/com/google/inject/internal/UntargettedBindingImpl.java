@@ -16,6 +16,9 @@
 
 package com.google.inject.internal;
 
+import static com.google.inject.internal.GuiceInternal.GUICE_INTERNAL;
+import static com.google.inject.spi.Elements.withTrustedSource;
+
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.inject.Binder;
@@ -33,8 +36,7 @@ final class UntargettedBindingImpl<T> extends BindingImpl<T> implements Untarget
         source,
         new InternalFactory<T>() {
           @Override
-          public T get(
-              Errors errors, InternalContext context, Dependency<?> dependency, boolean linked) {
+          public T get(InternalContext context, Dependency<?> dependency, boolean linked) {
             throw new AssertionError();
           }
         },
@@ -62,7 +64,7 @@ final class UntargettedBindingImpl<T> extends BindingImpl<T> implements Untarget
 
   @Override
   public void applyTo(Binder binder) {
-    getScoping().applyTo(binder.withSource(getSource()).bind(getKey()));
+    getScoping().applyTo(withTrustedSource(GUICE_INTERNAL, binder, getSource()).bind(getKey()));
   }
 
   @Override

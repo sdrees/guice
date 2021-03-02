@@ -1,8 +1,7 @@
 package com.google.inject.throwingproviders;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assert_;
-import static org.junit.Assert.fail;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.inject.TypeLiteral;
 import java.util.Arrays;
@@ -89,7 +88,7 @@ public final class CheckedProvidersTest extends TestCase {
           new TypeLiteral<MoreMethodsCheckedProvider<String>>() {}, "SHOW ME WHAT YOU GOT");
       fail("Expected an exception to be thrown");
     } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessage(message);
+      assertThat(e).hasMessageThat().isEqualTo(message);
     }
   }
 
@@ -107,9 +106,8 @@ public final class CheckedProvidersTest extends TestCase {
       CheckedProviders.throwing(FooCheckedProvider.class, StringException.class);
       fail("Expected an exception to be thrown");
     } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessage(message);
-      assert_()
-          .withFailureMessage(String.format("exception <%s> with cause", e))
+      assertThat(e).hasMessageThat().isEqualTo(message);
+      assertWithMessage(String.format("exception <%s> with cause", e))
           .that(e.getCause())
           .isInstanceOf(NoSuchMethodException.class);
     }
@@ -128,7 +126,7 @@ public final class CheckedProvidersTest extends TestCase {
       CheckedProviders.throwing(FooCheckedProvider.class, BarException.class);
       fail("Expected an exception to be thrown");
     } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessage(message);
+      assertThat(e).hasMessageThat().isEqualTo(message);
     }
   }
 

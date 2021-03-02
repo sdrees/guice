@@ -16,6 +16,8 @@
 
 package com.google.inject;
 
+import com.google.inject.spi.Element;
+import com.google.inject.spi.InjectionPoint;
 import com.google.inject.spi.TypeConverterBinding;
 import java.lang.annotation.Annotation;
 import java.util.List;
@@ -31,10 +33,10 @@ import java.util.Set;
  * <p>Contains several default bindings:
  *
  * <ul>
- * <li>This {@link Injector} instance itself
- * <li>A {@code Provider<T>} for each binding of type {@code T}
- * <li>The {@link java.util.logging.Logger} for the class being injected
- * <li>The {@link Stage} in which the Injector was created
+ *   <li>This {@link Injector} instance itself
+ *   <li>A {@code Provider<T>} for each binding of type {@code T}
+ *   <li>The {@link java.util.logging.Logger} for the class being injected
+ *   <li>The {@link Stage} in which the Injector was created
  * </ul>
  *
  * Injectors are created using the facade class {@link Guice}.
@@ -105,8 +107,9 @@ public interface Injector {
   /**
    * Returns a snapshot of this injector's bindings, <strong>both explicit and
    * just-in-time</strong>. The returned map is immutable; it contains only the bindings that were
-   * present when {@code getAllBindings()} was invoked. Subsequent calls may return a map with
-   * additional just-in-time bindings.
+   * present when {@code getAllBindings()} was invoked. Just-in-time bindings are only present if
+   * they have been requested at least once. Subsequent calls may return a map with additional
+   * just-in-time bindings.
    *
    * <p>The returned map does not include bindings inherited from a {@link #getParent() parent
    * injector}, should one exist.
@@ -259,4 +262,40 @@ public interface Injector {
    * @since 3.0
    */
   Set<TypeConverterBinding> getTypeConverterBindings();
+
+  /**
+   * Returns the elements that make up this injector. Note that not all kinds of elements are
+   * returned.
+   *
+   * <p>The returned list does not include elements inherited from a {@link #getParent() parent
+   * injector}, should one exist.
+   *
+   * <p>The returned list is immutable; it contains only the elements that were present when {@link
+   * #getElements} was invoked. Subsequent calls may return a list with additional elements.
+   *
+   * <p>The returned list does not include data inherited from a {@link #getParent() parent
+   * injector}, should one exist.
+   *
+   * <p>This method is part of the Guice SPI and is intended for use by tools and extensions.
+   *
+   * @since 4.2.3
+   */
+  List<Element> getElements();
+
+  /**
+   * Returns the injection points created for calls to {@link #getMembersInjector} (either directly
+   * or indirectly, e.g. through {@link #injectMembers}.
+   *
+   * <p>This excludes any injection points from elements (which are accessible from each element via
+   * the SPI), unless {@link #getMembersInjector} or {@link #injectMembers} were also called for the
+   * same key.
+   *
+   * <p>The returned multimap does not include data inherited from a {@link #getParent() parent
+   * injector}, should one exist.
+   *
+   * <p>This method is part of the Guice SPI and is intended for use by tools and extensions.
+   *
+   * @since 4.2.3
+   */
+  Map<TypeLiteral<?>, List<InjectionPoint>> getAllMembersInjectorInjectionPoints();
 }

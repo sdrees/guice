@@ -6,11 +6,33 @@
   <parent>
     <groupId>com.google.inject.extensions</groupId>
     <artifactId>extensions-parent</artifactId>
-    <version>4.1.1-SNAPSHOT</version>
+    <version>5.0.2-SNAPSHOT</version>
   </parent>
 
   <artifactId>guice-assistedinject</artifactId>
 
   <name>Google Guice - Extensions - AssistedInject</name>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Automatic-Module-Name>com.google.guice.extensions.assistedinject</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.google.truth</groupId>
+      <artifactId>truth</artifactId>
+    </dependency>
+  </dependencies>
 
 </project>

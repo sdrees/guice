@@ -24,6 +24,7 @@ import com.google.inject.TypeLiteral;
 import com.google.inject.internal.ProvisionListenerStackCallback.ProvisionCallback;
 import com.google.inject.spi.InjectionListener;
 import com.google.inject.spi.InjectionPoint;
+import javax.annotation.Nullable;
 
 /**
  * Injects members of instances of a given type.
@@ -35,11 +36,10 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
   private final InjectorImpl injector;
   // a null list means empty. Since it is common for many of these lists to be empty we can save
   // some memory lookups by representing empty as null.
-  /* @Nullable */ private final ImmutableList<SingleMemberInjector> memberInjectors;
-  /* @Nullable */ private final ImmutableList<MembersInjector<? super T>> userMembersInjectors;
-  /* @Nullable */ private final ImmutableList<InjectionListener<? super T>> injectionListeners;
-  /*if[AOP]*//* @Nullable */ private final ImmutableList<MethodAspect> addedAspects;
-  /*end[AOP]*/
+  @Nullable private final ImmutableList<SingleMemberInjector> memberInjectors;
+  @Nullable private final ImmutableList<MembersInjector<? super T>> userMembersInjectors;
+  @Nullable private final ImmutableList<InjectionListener<? super T>> injectionListeners;
+  @Nullable private final ImmutableList<MethodAspect> addedAspects;
 
   MembersInjectorImpl(
       InjectorImpl injector,
@@ -55,9 +55,10 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
         encounter.getInjectionListeners().isEmpty()
             ? null
             : encounter.getInjectionListeners().asList();
-    /*if[AOP]*/
-    this.addedAspects = encounter.getAspects().isEmpty() ? null : encounter.getAspects();
-    /*end[AOP]*/
+    this.addedAspects =
+        (InternalFlags.isBytecodeGenEnabled() && !encounter.getAspects().isEmpty())
+            ? encounter.getAspects()
+            : null;
   }
 
   public ImmutableList<SingleMemberInjector> getMemberInjectors() {
@@ -67,46 +68,39 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
   @Override
   public void injectMembers(T instance) {
     TypeLiteral<T> localTypeLiteral = typeLiteral;
-    Errors errors = new Errors(localTypeLiteral);
     try {
-      injectAndNotify(instance, errors, null, null, localTypeLiteral, false);
-    } catch (ErrorsException e) {
-      errors.merge(e.getErrors());
+      injectAndNotify(instance, null, null, localTypeLiteral, false);
+    } catch (InternalProvisionException ipe) {
+      throw ipe.addSource(localTypeLiteral).toProvisionException();
     }
-
-    errors.throwProvisionExceptionIfErrorsExist();
   }
 
   void injectAndNotify(
       final T instance,
-      final Errors errors,
       final Key<T> key, // possibly null!
       final ProvisionListenerStackCallback<T> provisionCallback, // possibly null!
       final Object source,
       final boolean toolableOnly)
-      throws ErrorsException {
+      throws InternalProvisionException {
     if (instance == null) {
       return;
     }
     final InternalContext context = injector.enterContext();
-    context.pushState(key, source);
     try {
       if (provisionCallback != null && provisionCallback.hasListeners()) {
         provisionCallback.provision(
-            errors,
             context,
             new ProvisionCallback<T>() {
               @Override
-              public T call() {
-                injectMembers(instance, errors, context, toolableOnly);
+              public T call() throws InternalProvisionException {
+                injectMembers(instance, context, toolableOnly);
                 return instance;
               }
             });
       } else {
-        injectMembers(instance, errors, context, toolableOnly);
+        injectMembers(instance, context, toolableOnly);
       }
     } finally {
-      context.popState();
       context.close();
     }
 
@@ -119,37 +113,37 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
     // the above callInContext could return 'true' if it injected
     // anything.)
     if (!toolableOnly) {
-      notifyListeners(instance, errors);
+      notifyListeners(instance);
     }
   }
 
-  void notifyListeners(T instance, Errors errors) throws ErrorsException {
+  void notifyListeners(T instance) throws InternalProvisionException {
     ImmutableList<InjectionListener<? super T>> localInjectionListeners = injectionListeners;
     if (localInjectionListeners == null) {
       // no listeners
       return;
     }
-    int numErrorsBefore = errors.size();
     // optimization: use manual for/each to save allocating an iterator here
     for (int i = 0; i < localInjectionListeners.size(); i++) {
       InjectionListener<? super T> injectionListener = localInjectionListeners.get(i);
       try {
         injectionListener.afterInjection(instance);
       } catch (RuntimeException e) {
-        errors.errorNotifyingInjectionListener(injectionListener, typeLiteral, e);
+        throw InternalProvisionException.errorNotifyingInjectionListener(
+            injectionListener, typeLiteral, e);
       }
     }
-    errors.throwIfNewErrors(numErrorsBefore);
   }
 
-  void injectMembers(T t, Errors errors, InternalContext context, boolean toolableOnly) {
+  void injectMembers(T t, InternalContext context, boolean toolableOnly)
+      throws InternalProvisionException {
     ImmutableList<SingleMemberInjector> localMembersInjectors = memberInjectors;
     if (localMembersInjectors != null) {
       // optimization: use manual for/each to save allocating an iterator here
       for (int i = 0, size = localMembersInjectors.size(); i < size; i++) {
         SingleMemberInjector injector = localMembersInjectors.get(i);
         if (!toolableOnly || injector.getInjectionPoint().isToolable()) {
-          injector.inject(errors, context, t);
+          injector.inject(context, t);
         }
       }
     }
@@ -164,7 +158,8 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
           try {
             userMembersInjector.injectMembers(t);
           } catch (RuntimeException e) {
-            errors.errorInUserInjector(userMembersInjector, typeLiteral, e);
+            throw InternalProvisionException.errorInUserInjector(
+                userMembersInjector, typeLiteral, e);
           }
         }
       }
@@ -188,9 +183,7 @@ final class MembersInjectorImpl<T> implements MembersInjector<T> {
     return ImmutableSet.of();
   }
 
-  /*if[AOP]*/
   public ImmutableList<MethodAspect> getAddedAspects() {
     return addedAspects == null ? ImmutableList.<MethodAspect>of() : addedAspects;
   }
-  /*end[AOP]*/
 }

@@ -21,6 +21,7 @@ import com.google.inject.spi.InjectionPoint;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.function.BiFunction;
 
 /** Invokes an injectable method. */
 final class SingleMethodInjector implements SingleMemberInjector {
@@ -37,25 +38,26 @@ final class SingleMethodInjector implements SingleMemberInjector {
   }
 
   private MethodInvoker createMethodInvoker(final Method method) {
-
-    /*if[AOP]*/
-    try {
-      final net.sf.cglib.reflect.FastClass fastClass = BytecodeGen.newFastClassForMember(method);
-      if (fastClass != null) {
-        final int index = fastClass.getMethod(method).getIndex();
-
-        return new MethodInvoker() {
-          @Override
-          public Object invoke(Object target, Object... parameters)
-              throws IllegalAccessException, InvocationTargetException {
-            return fastClass.invoke(index, target, parameters);
-          }
-        };
+    if (InternalFlags.isBytecodeGenEnabled()) {
+      try {
+        BiFunction<Object, Object[], Object> fastMethod = BytecodeGen.fastMethod(method);
+        if (fastMethod != null) {
+          return new MethodInvoker() {
+            @Override
+            public Object invoke(Object target, Object... parameters)
+                throws InvocationTargetException {
+              try {
+                return fastMethod.apply(target, parameters);
+              } catch (Throwable e) {
+                throw new InvocationTargetException(e); // match JDK reflection behaviour
+              }
+            }
+          };
+        }
+      } catch (Exception | LinkageError e) {
+        /* fall-through */
       }
-    } catch (net.sf.cglib.core.CodeGenerationException e) {
-      /* fall-through */
     }
-    /*end[AOP]*/
 
     int modifiers = method.getModifiers();
     if (!Modifier.isPublic(modifiers)
@@ -78,14 +80,8 @@ final class SingleMethodInjector implements SingleMemberInjector {
   }
 
   @Override
-  public void inject(Errors errors, InternalContext context, Object o) {
-    Object[] parameters;
-    try {
-      parameters = SingleParameterInjector.getAll(errors, context, parameterInjectors);
-    } catch (ErrorsException e) {
-      errors.merge(e.getErrors());
-      return;
-    }
+  public void inject(InternalContext context, Object o) throws InternalProvisionException {
+    Object[] parameters = SingleParameterInjector.getAll(context, parameterInjectors);
 
     try {
       methodInvoker.invoke(o, parameters);
@@ -93,7 +89,7 @@ final class SingleMethodInjector implements SingleMemberInjector {
       throw new AssertionError(e); // a security manager is blocking us, we're hosed
     } catch (InvocationTargetException userException) {
       Throwable cause = userException.getCause() != null ? userException.getCause() : userException;
-      errors.withSource(injectionPoint).errorInjectingMethod(cause);
+      throw InternalProvisionException.errorInjectingMethod(cause).addSource(injectionPoint);
     }
   }
 }
